@@ -1,39 +1,27 @@
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+import streamlit as st
 from hindsight_client import Hindsight
 
 BANK_ID = "codemind-ai"
-BASE_URL = "http://127.0.0.1:8888"
 
-def run_async(coro):
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        return executor.submit(asyncio.run, coro).result()
+def get_client():
+    return Hindsight(
+        base_url=st.secrets["HINDSIGHT_BASE_URL"],
+        api_key=st.secrets["HINDSIGHT_API_KEY"]
+    )
 
 def save_memory(content):
-    async def operation():
-        client = Hindsight(base_url=BASE_URL)
-        try:
-            await client.aretain(
-                bank_id=BANK_ID,
-                content=content
-            )
-            return "Memory saved successfully!"
-        finally:
-            await client.aclose()
-
-    return run_async(operation())
+    with get_client() as client:
+        client.retain(
+            bank_id=BANK_ID,
+            content=content
+        )
+    return "Memory saved successfully!"
 
 def recall_memory(query):
-    async def operation():
-        client = Hindsight(base_url=BASE_URL)
-        try:
-            result = await client.arecall(
-                bank_id=BANK_ID,
-                query=query
-            )
-            return [item.text for item in result.results]
-        finally:
-            await client.aclose()
-
-    return run_async(operation())
+    with get_client() as client:
+        result = client.recall(
+            bank_id=BANK_ID,
+            query=query
+        )
+        return [item.text for item in result.results]
