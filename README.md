@@ -92,3 +92,7 @@ To help Java developers and students improve their coding skills through intelli
 ## Developed For
 
 Hindsight AI Agent Challenge.
+## Demo Video
+
+Watch CodeMind AI in action:
+https://youtu.be/JsVF7Phn-gE
