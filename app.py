@@ -1,6 +1,6 @@
 
 import streamlit as st
-import ollama
+from groq import Groq
 from memory import save_memory, recall_memory
 
 st.set_page_config(
@@ -19,7 +19,12 @@ st.write(
 
 st.divider()
 
-# Java Code Reviewer
+# Connect to Groq
+try:
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except Exception:
+    client = None
+
 st.header("☕ Java Code Reviewer")
 
 code = st.text_area(
@@ -31,29 +36,35 @@ code = st.text_area(
 if st.button("🔍 Review My Code"):
     if not code.strip():
         st.warning("Please enter Java code first.")
+
+    elif client is None:
+        st.error("Groq API key is missing. Check Streamlit Secrets.")
+
     else:
         with st.spinner("Reviewing your Java code..."):
             try:
-                previous = recall_memory(
-                    "Previous Java coding mistakes and preferences"
-                )
+                # Try to recall previous memories
+                try:
+                    previous = recall_memory(
+                        "Previous Java coding mistakes and preferences"
+                    )
+                    context = "\n".join(previous) if previous else "No previous memory."
+                except Exception:
+                    context = "Memory service is currently unavailable."
 
-                context = "\n".join(previous) if previous else "No previous memory."
-
-                response = ollama.chat(
-                    model="llama3.2:latest",
+                response = client.chat.completions.create(
+                    model="openai/gpt-oss-20b",
                     messages=[
                         {
-    "role": "system",
-    "content": (
-        "You are CodeMind AI, an expert Java code reviewer and "
-        "personal coding mentor. Explain problems in simple language. "
-        "Identify bugs, errors, improvements and best practices. "
-        "IMPORTANT: Use previous developer memories to identify "
-        "recurring mistakes and give personalized suggestions. "
-        "Never invent past mistakes."
-    )
-},
+                            "role": "system",
+                            "content": (
+                                "You are CodeMind AI, an expert Java code reviewer "
+                                "and personal coding mentor. Explain problems in "
+                                "simple language. Identify bugs, errors, improvements "
+                                "and best practices. Use previous developer memories "
+                                "when available. Never invent past mistakes."
+                            )
+                        },
                         {
                             "role": "user",
                             "content": f"""
@@ -74,19 +85,24 @@ Give:
                     ]
                 )
 
-                review = response["message"]["content"]
+                review = response.choices[0].message.content
 
                 st.session_state["last_review"] = review
                 st.session_state["last_code"] = code
 
-                save_memory(
-                    f"Java code review: {review}. Original code: {code}"
-                )
-
-                st.success("Review completed and saved to Hindsight memory!")
+                # Save review to Hindsight if available
+                try:
+                    save_memory(
+                        f"Java code review: {review}. Original code: {code}"
+                    )
+                    st.success("Review completed and memory saved!")
+                except Exception:
+                    st.warning(
+                        "Review completed, but Hindsight is not connected online yet."
+                    )
 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"AI review error: {e}")
 
 if "last_review" in st.session_state:
     st.subheader("📋 AI Code Review")
@@ -96,7 +112,6 @@ st.divider()
 
 # Developer Memory
 st.header("🧠 Developer Memory")
-
 st.write("Ask CodeMind AI what it remembers from previous reviews.")
 
 question = st.text_input(
@@ -105,7 +120,9 @@ question = st.text_input(
 )
 
 if st.button("🧠 Recall Memory"):
-    if question.strip():
+    if not question.strip():
+        st.warning("Enter a question first.")
+    else:
         with st.spinner("Searching Hindsight memory..."):
             try:
                 memories = recall_memory(question)
@@ -116,7 +133,7 @@ if st.button("🧠 Recall Memory"):
                 else:
                     st.warning("No related memories found.")
 
-            except Exception as e:
-                st.error(f"Memory error: {e}")
-    else:
-        st.warning("Enter a question first.")
+            except Exception:
+                st.error(
+                    "Hindsight is not connected to the online website yet."
+                )
